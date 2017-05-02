@@ -2,6 +2,7 @@ import arrow
 import csv
 
 __verbose__ = False
+data_dir = "./data/"
 
 def dbg(*args):
 	if __verbose__:
@@ -132,6 +133,7 @@ class Source(object):
 	def parse_file(self, filename, date_format, date_index, amount_index, name_index):
 		self.date_format = date_format
 		self.missing_transactions = False
+		filename = data_dir + filename
 		with open(filename, "rb") as f:
 			filereader = csv.reader(f, delimiter=',', quotechar='"')
 			for row in filereader:
@@ -164,7 +166,6 @@ class Finances(object):
 		self.credits = []
 		# self.last_updated = last_updated
 		for source in sources:
-			print source
 			self.add_source(source)
 
 	def add_source(self,source):
@@ -174,7 +175,7 @@ class Finances(object):
 		if source.fund_type == "credit":
 			self.credits.append(source)
 
-	def show_me_the_monthy(self, year, month):
+	def summary_by_month(self, year, month):
 		"""
 		illustrates the financial deltas over a given month
 		cash are positive debit transactions and negative credit transactions
@@ -217,26 +218,35 @@ class Finances(object):
 		total_debts = debts.sum()
 		print "Between %s and %s, spent %s, made %s for a total change of %s" % (begin, end, total_debts, total_cash, total_cash+total_debts)
 
+	@staticmethod
+	def balance_transfers(source1, source2):
+		"""
+		finds transactions between two transaction lists that are balance transfers
+		"""
+		transfers = []
+		for transaction1 in source1.transactions.transactions:
+			for transaction2 in source2.transactions.transactions:
+				if transaction1.amount * -1 == transaction2.amount: #and abs(transaction1.date - transaction2.date).days < 7:
+					transfers.append((transaction1, transaction2))
+		return transfers
+
+def main():
+	bofa = Source("bofa","debit")
+	bofa.parse_file("bofa/bofa_since_11.16.csv", date_format="MM/DD/YYYY", date_index=0, amount_index=2, name_index=1)
+	chase = Source("chase","credit")
+	chase.parse_file("chase/chase_since_11.16.CSV", date_format="MM/DD/YYYY", date_index=1,amount_index=4,name_index=3)
+	amex = Source("amex","credit")
+	amex.parse_file("amex/amex_data_since_11.16.csv",date_format="MM/DD/YYYY",date_index=0,amount_index=7,name_index=2)
+	f = Finances(bofa,amex,chase)
+	# f.balance_transfers(bofa,chase)
+	t = f.balance_transfers(bofa,amex)
+	b = [a[0].amount for a in t]
+	print b
+
+if __name__ == '__main__':
+	main()
 
 
-# a = Transaction(56, "5/6/1992", "hello world")
-# a.add_tags("venmo")
-# a.add_tags("dining")
-# print a
-
-bofa = Source("bofa","debit")
-bofa.parse_file("bofa_since_11.16.csv", date_format="MM/DD/YYYY", date_index=0, amount_index=2, name_index=1)
-chase = Source("chase","credit")
-chase.parse_file("chase_since_11.16.CSV", date_format="MM/DD/YYYY", date_index=1,amount_index=4,name_index=3)
-amex = Source("amex","credit")
-amex.parse_file("amex_data_since_11.16.csv",date_format="MM/DD/YYYY",date_index=0,amount_index=7,name_index=2)
-f = Finances(bofa,amex,chase)
-f.show_me_the_monthy(2017,1)
-f.show_me_the_monthy(2017,2)
-f.show_me_the_monthy(2017,3)
-f.summary_by_date("01/15/2017","02/15/2017")
-f.summary_by_date("02/15/2017","03/15/2017")
-f.summary_by_date("03/15/2017","04/15/2017")
 
 
 

@@ -1,3 +1,5 @@
 *.csv
 ENV/
 .DS_Store
+data/
+*.pyc
