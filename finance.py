@@ -155,7 +155,7 @@ class TransactionList(object):
 		for year in monthly_sums.keys():
 			for month in monthly_sums[year].keys():
 				monthly_sums[year][month] = monthly_sums[year][month].sum()
-		print monthly_sums
+		return monthly_sums
 
 	def weekly_summary(self):
 		"""
@@ -173,7 +173,7 @@ class TransactionList(object):
 		for week in weekly_transactions:
 			weekly_sums[week] = weekly_transactions[week].sum()
 
-		print weekly_sums
+		return weekly_sums
 
 
 
@@ -215,6 +215,13 @@ class Source(object):
 	def transactions_within_month(self,year,month):
 		return self.transactions.transactions_within_month(year,month)
 
+	def weekly_summary(self):
+		return self.transactions.weekly_summary()
+
+	def monthly_summary(self):
+		return self.transactions.monthly_summary()
+
+
 class Finances(object):
 	"""
 	A collection of Sources that affect the overall financial picture
@@ -227,6 +234,9 @@ class Finances(object):
 		# self.last_updated = last_updated
 		for source in sources:
 			self.add_source(source)
+
+	def __repr__(self):
+		return "Finance object containing %s" % (self.sources)
 
 	def add_source(self,source):
 		self.sources.append(source)
@@ -290,20 +300,36 @@ class Finances(object):
 					transfers.append((transaction1, transaction2))
 		return transfers
 
+	def load_current_finances(self):
+		bofa = Source("bofa","debit")
+		bofa.parse_file("bofa/bofa_since_11.16.csv", date_format="MM/DD/YYYY", date_index=0, amount_index=2, name_index=1)
+		chase = Source("chase","credit")
+		chase.parse_file("chase/chase_since_11.16.CSV", date_format="MM/DD/YYYY", date_index=1,amount_index=4,name_index=3)
+		amex = Source("amex","credit")
+		amex.parse_file("amex/amex_data_since_11.16.csv",date_format="MM/DD/YYYY",date_index=0,amount_index=7,name_index=2)
+		self.add_source(bofa)
+		self.add_source(chase)
+		self.add_source(amex)
+		print self
+
+
 def main():
-	bofa = Source("bofa","debit")
-	bofa.parse_file("bofa/bofa_since_11.16.csv", date_format="MM/DD/YYYY", date_index=0, amount_index=2, name_index=1)
-	chase = Source("chase","credit")
-	chase.parse_file("chase/chase_since_11.16.CSV", date_format="MM/DD/YYYY", date_index=1,amount_index=4,name_index=3)
-	amex = Source("amex","credit")
-	amex.parse_file("amex/amex_data_since_11.16.csv",date_format="MM/DD/YYYY",date_index=0,amount_index=7,name_index=2)
-	# chase.transactions.monthly_summary()
-	chase.transactions.weekly_summary()
+	# bofa = Source("bofa","debit")
+	# bofa.parse_file("bofa/bofa_since_11.16.csv", date_format="MM/DD/YYYY", date_index=0, amount_index=2, name_index=1)
+	# chase = Source("chase","credit")
+	# chase.parse_file("chase/chase_since_11.16.CSV", date_format="MM/DD/YYYY", date_index=1,amount_index=4,name_index=3)
+	# amex = Source("amex","credit")
+	# amex.parse_file("amex/amex_data_since_11.16.csv",date_format="MM/DD/YYYY",date_index=0,amount_index=7,name_index=2)
+	# # chase.transactions.monthly_summary()
+	# chase.transactions.weekly_summary()
 	# f = Finances(bofa,amex,chase)
 	# # f.balance_transfers(bofa,chase)
 	# t = f.balance_transfers(bofa,amex)
 	# b = [a[0].amount for a in t]
 	# print b
+	f = Finances()
+	f.load_current_finances()
+
 
 if __name__ == '__main__':
 	main()
