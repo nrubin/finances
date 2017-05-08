@@ -12,9 +12,13 @@
     <div class="container">
       <h1>Noam's Finances</h1>
       <br>
-      <div id="main"></div>
+      <div id="main">
+        <canvas id="myChart" width="400" height="400"></canvas>
+      </div>
     </div>
     <!-- scripts -->
-    <script src="{{ url_for('static', filename='scripts/js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/node_modules/chart.js/dist/Chart.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/node_modules/jquery/dist/jquery.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   </body>
 </html>

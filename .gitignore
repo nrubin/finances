@@ -3,3 +3,4 @@ ENV/
 .DS_Store
 data/
 *.pyc
+static/js/node_modules

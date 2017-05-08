@@ -27,6 +27,18 @@ def parse_date(d_str,d_format):
 			date = None
 	return date
 
+def nearest_sundays(d):
+	"""
+	returns the previous and next sundays. if d is a sunday, then previous = d and next = d+7
+	"""
+	current_weekday = d.isoweekday()
+	if current_weekday == 0:
+		return (d, d.replace(days=+7))
+	else:
+		previous_sunday = d.replace(days=-current_weekday)
+		next_sunday = d.replace(days=+(7-current_weekday))
+		return (previous_sunday, next_sunday)
+
 class Transaction(object):
 	def __init__(self, amount, date, date_format, name):
 			dbg(amount)
@@ -101,21 +113,69 @@ class TransactionList(object):
 				total_outs += t.amount
 		return "%s ins, %s outs, %s total in and %s total out, %s balance" % (len(ins), len(outs), total_ins, total_outs, total_ins + total_outs)		
 
-	def transactions_by_date(self,begin_str,end_str):
-		begin = arrow.get(begin_str,"MM/DD/YYYY")
-		end = arrow.get(end_str,"MM/DD/YYYY")
+	def transactions_within_date(self,begin,end):
+		if isinstance(begin,str):
+			begin = arrow.get(begin,"MM/DD/YYYY")
+			end = arrow.get(end,"MM/DD/YYYY")
 		transactions = TransactionList()
 		for t in self.transactions:
 			if t.date >= begin and t.date <= end:
 				transactions.append(t)
 		return transactions
 
-	def transactions_by_month(self,year,month):
+	def transactions_within_month(self,year,month):
 		transactions = TransactionList()
 		for t in self.transactions:
 			if t.date.month == month and t.date.year == year:
 				transactions.append(t)
 		return transactions
+
+	def monthly_summary(self):
+		"""
+		groups and sums transactions by month in the entire TransactionList timespan
+		"""
+		
+		sorted_transactions = sorted(self.transactions, key=lambda x: x.date)
+		earliest_transaction_date = sorted_transactions[0].date
+		latest_transaction_date = sorted_transactions[-1].date
+
+		monthly_transactions = {}
+		for r in arrow.Arrow.range("month", earliest_transaction_date, latest_transaction_date):
+			months = monthly_transactions.get(r.year,None)
+			if months is None:
+				monthly_transactions[r.year] = {r.month : TransactionList()}
+			else:
+				if months.get(r.month, None) is None:
+					months[r.month] = TransactionList()
+		
+		for t in self.transactions:
+			monthly_transactions[t.date.year][t.date.month].append(t)
+		
+		monthly_sums = monthly_transactions
+		for year in monthly_sums.keys():
+			for month in monthly_sums[year].keys():
+				monthly_sums[year][month] = monthly_sums[year][month].sum()
+		print monthly_sums
+
+	def weekly_summary(self):
+		"""
+		groups and sums transactions by week in the entire TransactionList timespan
+		"""
+		sorted_transactions = sorted(self.transactions, key=lambda x: x.date)
+		earliest_transaction_date = nearest_sundays(sorted_transactions[0].date)[0]
+		latest_transaction_date = nearest_sundays(sorted_transactions[-1].date)[1]
+
+		weekly_transactions = {}
+		for r in arrow.Arrow.range("week",earliest_transaction_date,latest_transaction_date):
+			weekly_transactions[r.format("MM/DD/YYYY")] = self.transactions_within_date(r,r.replace(days=+6))
+
+		weekly_sums = {}
+		for week in weekly_transactions:
+			weekly_sums[week] = weekly_transactions[week].sum()
+
+		print weekly_sums
+
+
 
 class Source(object):
 	"""
@@ -149,11 +209,11 @@ class Source(object):
 	def deltas(self):
 		self.transactions.deltas()
 
-	def transactions_by_date(self,begin,end):
-		return self.transactions.transactions_by_date(begin,end)
+	def transactions_within_date(self,begin,end):
+		return self.transactions.transactions_within_date(begin,end)
 
-	def transactions_by_month(self,year,month):
-		return self.transactions.transactions_by_month(year,month)
+	def transactions_within_month(self,year,month):
+		return self.transactions.transactions_within_month(year,month)
 
 class Finances(object):
 	"""
@@ -175,7 +235,7 @@ class Finances(object):
 		if source.fund_type == "credit":
 			self.credits.append(source)
 
-	def summary_by_month(self, year, month):
+	def month_snapshot(self, year, month):
 		"""
 		illustrates the financial deltas over a given month
 		cash are positive debit transactions and negative credit transactions
@@ -184,13 +244,13 @@ class Finances(object):
 		cash = TransactionList()
 		debts = TransactionList()
 		for debit_source in self.debits:
-			for t in debit_source.transactions_by_month(year,month).transactions:
+			for t in debit_source.transactions_within_month(year,month).transactions:
 				if t.amount > 0:
 					cash.append(t)
 				else:
 					debts.append(t)
 		for credit_source in self.credits:
-			for t in credit_source.transactions_by_month(year,month).transactions:
+			for t in credit_source.transactions_within_month(year,month).transactions:
 				if t.amount > 0:
 					debts.append(t)
 				else:
@@ -199,17 +259,17 @@ class Finances(object):
 		total_debts = debts.sum()
 		print "In %s/%s, spent %s, made %s for a total change of %s" % (month, year, total_debts, total_cash, total_cash+total_debts)
 
-	def summary_by_date(self,begin,end):
+	def date_snapshot(self,begin,end):
 		cash = TransactionList()
 		debts = TransactionList()
 		for debit_source in self.debits:
-			for t in debit_source.transactions_by_date(begin,end).transactions:
+			for t in debit_source.transactions_within_date(begin,end).transactions:
 				if t.amount > 0:
 					cash.append(t)
 				else:
 					debts.append(t)
 		for credit_source in self.credits:
-			for t in credit_source.transactions_by_date(begin,end).transactions:
+			for t in credit_source.transactions_within_date(begin,end).transactions:
 				if t.amount > 0:
 					debts.append(t)
 				else:
@@ -237,11 +297,13 @@ def main():
 	chase.parse_file("chase/chase_since_11.16.CSV", date_format="MM/DD/YYYY", date_index=1,amount_index=4,name_index=3)
 	amex = Source("amex","credit")
 	amex.parse_file("amex/amex_data_since_11.16.csv",date_format="MM/DD/YYYY",date_index=0,amount_index=7,name_index=2)
-	f = Finances(bofa,amex,chase)
-	# f.balance_transfers(bofa,chase)
-	t = f.balance_transfers(bofa,amex)
-	b = [a[0].amount for a in t]
-	print b
+	# chase.transactions.monthly_summary()
+	chase.transactions.weekly_summary()
+	# f = Finances(bofa,amex,chase)
+	# # f.balance_transfers(bofa,chase)
+	# t = f.balance_transfers(bofa,amex)
+	# b = [a[0].amount for a in t]
+	# print b
 
 if __name__ == '__main__':
 	main()
